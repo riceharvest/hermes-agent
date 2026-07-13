@@ -55,6 +55,33 @@ def test_finalize_single_query_releases_session_when_cleanup_fails(monkeypatch):
     assert calls == ["finalize", "cleanup", "release"]
 
 
+def test_single_query_session_disables_detached_completion_delivery():
+    """A process that exits after one turn cannot promise a later agent turn."""
+    from gateway.session_context import (
+        async_delivery_supported,
+        reset_async_delivery_supported,
+    )
+
+    token = cli._bind_single_query_session()
+    try:
+        assert async_delivery_supported() is False
+    finally:
+        reset_async_delivery_supported(token)
+
+    assert async_delivery_supported() is True
+
+
+def test_single_query_session_preserves_cli_identity(monkeypatch):
+    from gateway.session_context import get_session_env, reset_async_delivery_supported
+
+    monkeypatch.setenv("HERMES_SESSION_SOURCE", "existing-cli-source")
+    token = cli._bind_single_query_session()
+    try:
+        assert get_session_env("HERMES_SESSION_SOURCE") == "existing-cli-source"
+    finally:
+        reset_async_delivery_supported(token)
+
+
 def test_finalize_single_query_runs_cleanup_when_finalize_hook_fails(monkeypatch):
     calls = []
     fake_agent = SimpleNamespace(session_id="agent-session", platform="cli")
@@ -174,6 +201,9 @@ def test_human_single_query_main_finalizes_after_query(monkeypatch):
             calls.append("advisories")
 
         def chat(self, query, images=None):
+            from gateway.session_context import async_delivery_supported
+
+            assert async_delivery_supported() is False
             calls.append(("chat", query, images))
             return "done"
 
@@ -206,6 +236,9 @@ def test_quiet_single_query_main_finalizes_while_preserving_exit_code(monkeypatc
     import cli as cli_mod
 
     def run_conversation(*, user_message, conversation_history):
+        from gateway.session_context import async_delivery_supported
+
+        assert async_delivery_supported() is False
         calls.append(("run", user_message, conversation_history))
         return {
             "final_response": "",

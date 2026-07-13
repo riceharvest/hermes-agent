@@ -1236,6 +1236,13 @@ def _finalize_single_query(cli) -> None:
         cli._release_active_session()
 
 
+def _bind_single_query_session():
+    """Disable detached delivery for a CLI process that exits after one turn."""
+    from gateway.session_context import set_async_delivery_supported
+
+    return set_async_delivery_supported(False)
+
+
 def _reset_terminal_input_modes_on_exit() -> None:
     """Best-effort: disable focus reporting + mouse tracking on TUI exit so they
     don't leak into the next shell session sharing the tab.
@@ -16076,6 +16083,7 @@ def main(
     if query or image:
         if not cli._claim_active_session("cli", stderr=bool(quiet)):
             sys.exit(1)
+        _single_query_session_token = _bind_single_query_session()
         try:
             query, single_query_images = _collect_query_images(query, image)
             # Kanban workers spawn with ``hermes chat -q "work kanban task <id>"``;
@@ -16291,7 +16299,12 @@ def main(
                 cli.chat(query, images=single_query_images or None)
                 cli._print_exit_summary(clear_screen=False)
         finally:
-            _finalize_single_query(cli)
+            try:
+                _finalize_single_query(cli)
+            finally:
+                from gateway.session_context import reset_async_delivery_supported
+
+                reset_async_delivery_supported(_single_query_session_token)
         return
     
     # Run interactive mode

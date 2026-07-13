@@ -327,6 +327,16 @@ def get_session_env(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
+def set_async_delivery_supported(supported: bool):
+    """Temporarily override async-delivery capability in the current context."""
+    return _SESSION_ASYNC_DELIVERY.set(bool(supported))
+
+
+def reset_async_delivery_supported(token) -> None:
+    """Restore the async-delivery capability saved by the matching setter."""
+    _SESSION_ASYNC_DELIVERY.reset(token)
+
+
 def async_delivery_supported() -> bool:
     """Whether the current session can deliver a background completion later.
 
